@@ -1,0 +1,50 @@
+{
+  "schemeId": "demo_merit_fictional",
+  "name": "Demo Merit Scheme (fictional)",
+  "academicYear": "2026-27",
+  "version": "1.0",
+  "verificationLevel": "OFFICIAL_VERIFIED",
+  "officialSourceUrl": "https://example.edu/scholarships/merit-demo",
+  "officialSourceTitle": "Demo University Merit Rules 2026",
+  "lastVerifiedAt": "2026-09-01",
+  "supersedes": null,
+  "notes": "Fully specified fictional scheme for testing all MET / NOT_MET / UNKNOWN code paths and recovery planners.",
+  "criteria": [
+    {
+      "id": "merit_att",
+      "label": "Attendance Requirement >= 80%",
+      "track": "all",
+      "type": "attendance_certified",
+      "operator": ">=",
+      "value": 80.0,
+      "unit": "percent",
+      "requiredDataFields": ["attendance_overall"],
+      "verification": "Portal attendance record",
+      "notes": "Target recovery planner activates if below 80%."
+    },
+    {
+      "id": "merit_academic",
+      "label": "Latest Semester SGPA >= 7.50",
+      "track": "all",
+      "type": "sgpa",
+      "operator": ">=",
+      "value": 7.50,
+      "unit": "grade_point",
+      "requiredDataFields": ["latest_sgpa"],
+      "verification": "Published grade card",
+      "notes": "Verified against published semester results."
+    },
+    {
+      "id": "merit_income",
+      "label": "Annual Family Income <= 8,00,000 INR",
+      "track": "all",
+      "type": "annual_family_income",
+      "operator": "<=",
+      "value": 800000.0,
+      "unit": "INR",
+      "requiredDataFields": ["annualFamilyIncome"],
+      "verification": "Self-attested income certificate",
+      "notes": "Attested fact submitted by student."
+    }
+  ]
+}

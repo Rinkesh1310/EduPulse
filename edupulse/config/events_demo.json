@@ -1,0 +1,123 @@
+[
+  {
+    "eventId": "EVT-2026-001",
+    "name": "InnovateX Hackathon 2026",
+    "date": "2026-09-29",
+    "endDate": "2026-09-29",
+    "activityType": "hackathon",
+    "durationType": "full-day",
+    "hours": null,
+    "organizer": "Student Technical Chapter",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-002",
+    "name": "Hands-on Workshop: Cloud Native Architecture",
+    "date": "2026-08-14",
+    "endDate": "2026-08-14",
+    "activityType": "workshop",
+    "durationType": "hours",
+    "hours": 4.0,
+    "organizer": "Department of Computer Engineering",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-003",
+    "name": "State-Level Algorithm Coding Sprint",
+    "date": "2026-09-12",
+    "endDate": "2026-09-12",
+    "activityType": "competition",
+    "durationType": "hours",
+    "hours": 3.0,
+    "organizer": "Coding Society",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-004",
+    "name": "Annual Engineering Project Showcase",
+    "date": "2026-10-15",
+    "endDate": "2026-10-15",
+    "activityType": "project",
+    "durationType": "full-day",
+    "hours": null,
+    "organizer": "Faculty of Technology",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-005",
+    "name": "Expert Seminar: Ethics & Privacy in Modern AI",
+    "date": "2026-07-28",
+    "endDate": "2026-07-28",
+    "activityType": "seminar",
+    "durationType": "hours",
+    "hours": 2.0,
+    "organizer": "Industry-Academia Cell",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-006",
+    "name": "Open Source Community Contribution Drive",
+    "date": "2026-08-22",
+    "endDate": "2026-08-22",
+    "activityType": "club",
+    "durationType": "hours",
+    "hours": 3.5,
+    "organizer": "FOSS Circle",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-007",
+    "name": "Technical Paper Presentation Colloquium",
+    "date": "2026-09-05",
+    "endDate": "2026-09-05",
+    "activityType": "academic_activity",
+    "durationType": "hours",
+    "hours": 4.0,
+    "organizer": "Research & Publication Council",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-008",
+    "name": "Cybersecurity Capture The Flag (CTF)",
+    "date": "2026-10-02",
+    "endDate": "2026-10-02",
+    "activityType": "competition",
+    "durationType": "full-day",
+    "hours": null,
+    "organizer": "Infosec Club",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-009",
+    "name": "Web Performance Masterclass",
+    "date": "2026-11-04",
+    "endDate": "2026-11-04",
+    "activityType": "workshop",
+    "durationType": "hours",
+    "hours": 3.0,
+    "organizer": "Web Development Group",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-010",
+    "name": "Robotics & Embedded Systems Hack",
+    "date": "2026-11-18",
+    "endDate": "2026-11-18",
+    "activityType": "hackathon",
+    "durationType": "full-day",
+    "hours": null,
+    "organizer": "Robotics Club",
+    "source": "demo catalogue"
+  },
+  {
+    "eventId": "EVT-2026-011",
+    "name": "Machine Learning Model Deployment Clinic",
+    "date": "2026-08-05",
+    "endDate": "2026-08-05",
+    "activityType": "academic_activity",
+    "durationType": "hours",
+    "hours": 2.5,
+    "organizer": "AI Student SIG",
+    "source": "demo catalogue"
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "version": "1.0.0",
+  "weights": {
+    "hackathon": 3.0,
+    "competition": 3.0,
+    "project": 3.0,
+    "workshop": 2.0,
+    "academic_activity": 2.0,
+    "seminar": 1.0,
+    "club": 1.0
+  },
+  "durationFactors": {
+    "full_day": 1.0,
+    "hours_divisor": 4.0,
+    "hours_min_floor": 0.25,
+    "hours_max_cap": 1.0
+  },
+  "levels": {
+    "getting_started": {
+      "label": "Getting started",
+      "description": "1–2 events or <4 points"
+    },
+    "active": {
+      "label": "Active",
+      "minPoints": 4.0,
+      "minEvents": 3,
+      "description": ">=4 points or >=3 events"
+    },
+    "highly_active": {
+      "label": "Highly active",
+      "minPoints": 10.0,
+      "minDiversity": 3,
+      "description": ">=10 points across >=3 distinct activity types"
+    }
+  }
+}

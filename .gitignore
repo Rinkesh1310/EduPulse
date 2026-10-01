@@ -1,0 +1,24 @@
+# Virtual environment
+.venv/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+
+# Databases
+*.sqlite
+*.db
+
+# Screenshots and forbidden credentials/identities
+reference/*.png
+reference/*.jpg
+reference/*.jpeg
+reference/*.pdf
+tests/local_forbidden_strings.txt
+
+# Local environment & scratch
+.env
+scratch/

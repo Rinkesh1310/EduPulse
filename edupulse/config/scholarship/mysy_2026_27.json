@@ -1,0 +1,86 @@
+{
+  "schemeId": "mysy_2026_27",
+  "name": "Mukhyamantri Yuva Swavalamban Yojana (MYSY)",
+  "academicYear": "2026-27",
+  "version": "1.0",
+  "verificationLevel": "SECONDARY_ONLY",
+  "officialSourceUrl": null,
+  "officialSourceTitle": null,
+  "lastVerifiedAt": null,
+  "supersedes": null,
+  "notes": "Secondary sources report renewal rules consistently, but fresh track rules conflict (percentile vs percentage). Official source verification required before live deployment.",
+  "criteria": [
+    {
+      "id": "mysy_ren_att",
+      "label": "Certified Attendance >= 75%",
+      "track": "renewal",
+      "type": "attendance_certified",
+      "operator": ">=",
+      "value": 75.0,
+      "unit": "percent",
+      "requiredDataFields": ["attendance_overall"],
+      "verification": "Certified by Head of Institute at term completion",
+      "notes": "Midterm attendance provides trajectory indication; formal eligibility uses certified year-end attendance."
+    },
+    {
+      "id": "mysy_ren_marks",
+      "label": "Previous Year Marks >= 50%",
+      "track": "renewal",
+      "type": "previous_year_marks",
+      "operator": ">=",
+      "value": 50.0,
+      "unit": "percent",
+      "requiredDataFields": ["previousYearMarksPercent"],
+      "verification": "Official marksheet percentage entry (never derived from SGPA)",
+      "notes": "Student must enter attested marksheet percentage."
+    },
+    {
+      "id": "mysy_ren_income",
+      "label": "Annual Family Income <= 6,00,000 INR",
+      "track": "renewal",
+      "type": "annual_family_income",
+      "operator": "<=",
+      "value": 600000.0,
+      "unit": "INR",
+      "requiredDataFields": ["annualFamilyIncome"],
+      "verification": "Competent authority income certificate",
+      "notes": "Requires valid income certificate as self-attested."
+    },
+    {
+      "id": "mysy_ren_domicile",
+      "label": "Gujarat Domicile",
+      "track": "renewal",
+      "type": "domicile_state",
+      "operator": "==",
+      "value": "Gujarat",
+      "unit": "text",
+      "requiredDataFields": ["domicileGujarat"],
+      "verification": "Domicile certificate / Aadhaar / School leaving certificate",
+      "notes": "Applicant must reside in Gujarat."
+    },
+    {
+      "id": "mysy_ren_recipient",
+      "label": "Currently an Approved Recipient (Renewal Track)",
+      "track": "renewal",
+      "type": "prior_recipient",
+      "operator": "==",
+      "value": true,
+      "unit": "boolean",
+      "requiredDataFields": ["currentlyReceivingScheme"],
+      "verification": "Prior sanction order / student portal record",
+      "notes": "Renewal requires proof of award in preceding year."
+    },
+    {
+      "id": "mysy_fresh_unverified",
+      "label": "Fresh Track Entrance Criteria (Conflicting Sources)",
+      "track": "fresh",
+      "type": "conflicting_track",
+      "operator": "==",
+      "value": "VERIFIED_RULES_REQUIRED",
+      "unit": "status",
+      "requiredDataFields": [],
+      "verification": "Unverified - sources conflict between 80 percentile vs 80% board marks",
+      "notes": "Fresh applicant track evaluation is withheld until confirmed against official portal."
+    }
+  ]
+}

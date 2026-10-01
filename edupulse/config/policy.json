@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "attendanceOverallPct": 75.0,
+  "attendancePerCoursePct": 70.0,
+  "aggregationLevel": "component",
+  "verified": false,
+  "sourceUrl": null,
+  "sourceNote": "Demo default from CHARUSAT student handbook (CMPICA). Unverified for your specific institute.",
+  "lastVerifiedAt": null,
+  "smallSampleThreshold": 8,
+  "bands": {
+    "course": {
+      "attentionMax": 70.0,
+      "monitorMax": 80.0
+    },
+    "overall": {
+      "attentionMax": 75.0,
+      "monitorMax": 80.0
+    }
+  }
+}

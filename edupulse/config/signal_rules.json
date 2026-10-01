@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "attendance": {
+    "overallThreshold": 75.0,
+    "courseThreshold": 70.0,
+    "earlyDataCount": 8,
+    "monitorBandMax": 80.0
+  },
+  "academic": {
+    "marksBands": {
+      "attentionMax": 50.0,
+      "monitorMax": 65.0
+    },
+    "assessmentTrendDiffThreshold": 10.0,
+    "sgpaTrendDiffThreshold": 0.3
+  },
+  "overall": {
+    "escalationRule": "Escalate one severity level when 2 or more primary signals are Moderate or higher"
+  }
+}
