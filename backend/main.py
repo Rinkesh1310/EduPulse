@@ -6,23 +6,24 @@ engagement, scholarship, cohort ML, and data import services.
 
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
+
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query, Body, Response
+from fastapi import Body, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from edupulse.domain.models import Student, Course, Assessment, AttendanceRecord, SemesterResult
-from edupulse.domain.enums import SupportLevel, EngagementStatus, CoverageStatus, VerificationLevel
-from edupulse.services.academic_service import AcademicService
+from edupulse.domain.enums import CoverageStatus, EngagementStatus, SupportLevel, VerificationLevel
+from edupulse.domain.models import Course, Student
 from edupulse.ml.cohort_generator import generate_synthetic_cohort
 from edupulse.ml.unsupervised import run_unsupervised_cohort_analysis
+from edupulse.providers.authorized_charusat import AuthorizedCharusatProvider, NotAuthorizedError
 from edupulse.providers.file_import import FileImportProvider
 from edupulse.providers.paste_import import PasteImportProvider
-from edupulse.providers.authorized_charusat import AuthorizedCharusatProvider, NotAuthorizedError
-
+from edupulse.services.academic_service import AcademicService
 
 app = FastAPI(
     title="EduPulse Academic Intelligence API",
@@ -30,21 +31,38 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Enable CORS for React frontend (Vite dev server)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Enable CORS for React frontend (supports local dev, Vercel deployments, and custom domains)
+cors_env = os.getenv("CORS_ORIGINS", "").strip()
+if cors_env:
+    allowed_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        allow_origin_regex=r"https://.*\.vercel\.app",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Service Singleton
 service = AcademicService()
 
-# Ensure personas are seeded
-if not service.get_student_profile("student_synth_strong"):
-    service.seed_all_personas(reset=True)
+# Ensure all demo personas are seeded
+if not service.get_student_profile("student_synth_att_concern") or not service.get_student_profile("student_synth_strong"):
+    service.seed_all_personas(reset=False)
 
 # In-memory active student ID
 _state = {
@@ -56,12 +74,25 @@ def get_current_student_id(override_id: Optional[str] = None) -> str:
         return override_id.strip()
     return _state["active_student_id"]
 
+
+def safe_float(val: Any, default: Optional[float] = None, digits: Optional[int] = None) -> Optional[float]:
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return round(f, digits) if digits is not None else f
+    except (ValueError, TypeError):
+        return default
+
 def sanitize_value(val: Any) -> Any:
     """Helper to ensure clean JSON serialization for numpy, enums, etc."""
     if isinstance(val, (np.integer,)):
         return int(val)
-    if isinstance(val, (np.floating,)):
-        return float(val) if not np.isnan(val) else None
+    if isinstance(val, (np.floating, float)):
+        f = float(val)
+        return None if (math.isnan(f) or math.isinf(f)) else f
     if isinstance(val, (np.bool_,)):
         return bool(val)
     if isinstance(val, (SupportLevel, EngagementStatus, CoverageStatus, VerificationLevel)):
@@ -176,6 +207,9 @@ def get_active_student():
 def set_active_student(req: SetActiveStudentRequest):
     student = service.get_student_profile(req.student_id)
     if not student:
+        service.seed_all_personas(reset=False)
+        student = service.get_student_profile(req.student_id)
+    if not student:
         raise HTTPException(status_code=404, detail=f"Student ID '{req.student_id}' does not exist")
     _state["active_student_id"] = req.student_id
     return {
@@ -212,17 +246,18 @@ def get_overview(student_id: Optional[str] = None):
     att_alerts = []
     for r in att_summary.get("records", []):
         if r.computed_percentage is not None and r.computed_percentage < policy.attendancePerCoursePct:
+            c_name = getattr(r, "courseName", None) or r.courseId
             att_alerts.append({
                 "type": "attendance",
                 "courseId": r.courseId,
-                "courseName": r.courseName or r.courseId,
+                "courseName": c_name,
                 "component": r.component.value,
                 "percentage": r.computed_percentage,
                 "present": r.presentCount,
                 "total": r.totalCount,
                 "threshold": policy.attendancePerCoursePct,
                 "severity": "high" if r.computed_percentage < 60.0 else "moderate",
-                "message": f"{r.courseName or r.courseId} ({r.component.value}) is at {r.computed_percentage:.1f}%, below the {policy.attendancePerCoursePct:.0f}% policy threshold."
+                "message": f"{c_name} ({r.component.value}) is at {r.computed_percentage:.1f}%, below the {policy.attendancePerCoursePct:.0f}% policy threshold."
             })
 
     acad_alerts = []
@@ -447,9 +482,9 @@ def get_attendance_summary(
                 status = "excellent"
 
         formatted_records.append({
-            "id": r.id,
+            "id": f"{r.courseId}_{r.component.value}",
             "courseId": r.courseId,
-            "courseName": r.courseName or r.courseId,
+            "courseName": r.courseName if hasattr(r, 'courseName') else r.courseId,
             "component": r.component.value,
             "presentCount": r.presentCount,
             "totalCount": r.totalCount,
@@ -492,7 +527,37 @@ def calculate_recovery(req: RecoveryCalculationRequest):
         target_pct=req.target_pct,
         remaining_classes=req.remaining_classes
     )
-    return sanitize_value(res)
+    
+    current_pct = (present / total * 100.0) if total > 0 else 0.0
+    
+    # Generate human-friendly message
+    if not res.get("isPossible"):
+        msg = f"Target {req.target_pct:.0f}% is mathematically impossible given current class totals."
+        status = "impossible"
+    elif res.get("classesNeeded", 0) == 0:
+        buffer = res.get("bufferClasses", 0)
+        msg = f"Target already achieved! Safe buffer: You can safely miss up to {buffer} class(es) before dropping below {req.target_pct:.0f}%."
+        status = "achieved"
+    elif res.get("isRecoverableWithinRemaining"):
+        needed = res.get("classesNeeded", 0)
+        msg = f"Consecutive classes needed: {needed} (will reach {res.get('resultingPercentage', req.target_pct):.1f}%)."
+        status = "recoverable"
+    else:
+        msg = f"Requires {res.get('classesNeeded')} classes, which exceeds your planned {req.remaining_classes} remaining classes."
+        status = "unrecoverable_in_term"
+
+    res_augmented = dict(res)
+    res_augmented.update({
+        "currentPresent": present,
+        "currentTotal": total,
+        "currentPct": round(current_pct, 1),
+        "targetPct": req.target_pct,
+        "remainingClasses": req.remaining_classes,
+        "neededConsecutive": res.get("classesNeeded", 0),
+        "message": msg,
+        "status": status
+    })
+    return sanitize_value(res_augmented)
 
 
 # -------------------------------------------------------------
@@ -516,6 +581,9 @@ def get_assessments(student_id: Optional[str] = None, course_id: Optional[str] =
     res = []
     for a in assessments:
         item = a.model_dump()
+        pct = (a.obtainedMarks / a.totalMarks * 100.0) if a.totalMarks > 0 else 0.0
+        item["percentage"] = round(pct, 1)
+        item["assessmentType"] = getattr(a, "type", "Evaluation")
         item["courseName"] = c_map.get(a.courseId, a.courseId)
         res.append(item)
     return sanitize_value(res)
@@ -611,19 +679,26 @@ def get_events(student_id: Optional[str] = None):
     res = []
     for e in events:
         item = e.model_dump()
-        part = participations.get(e.id)
-        item["participated"] = (part is not None and part.confirmed)
-        item["confirmedAt"] = part.confirmedAt if part else None
+        eid = e.eventId
+        item["id"] = eid
+        item["category"] = getattr(e, "activityType", "Co-Curricular")
+        item["durationHours"] = getattr(e, "hours", 4.0)
+        item["weight"] = 1.0
+        part = participations.get(eid)
+        item["participated"] = (part is not None and getattr(part, "confirmed", False))
+        item["confirmedAt"] = getattr(part, "confirmationDate", None) if part else None
         res.append(item)
     return sanitize_value(res)
 
 @app.post("/api/engagement/toggle-participation")
 def toggle_participation(req: ToggleParticipationRequest):
     st_id = get_current_student_id(req.student_id)
+    now_str = datetime.now().strftime("%Y-%m-%d")
     service.toggle_event_participation(
         student_id=st_id,
         event_id=req.event_id,
-        participated=req.participated
+        confirmed=req.participated,
+        confirmation_date=now_str
     )
     summary = service.get_engagement_summary(st_id)
     return sanitize_value({
@@ -662,13 +737,17 @@ def evaluate_scholarship(
     remaining_classes: int = 35
 ):
     st_id = get_current_student_id(student_id)
-    eval_res = service.evaluate_scholarship(
-        student_id=st_id,
-        scheme_id=scheme_id,
-        selected_track=track,
-        planned_remaining_classes=remaining_classes
-    )
-    return sanitize_value(eval_res)
+    effective_scheme_id = "mysy_2026_27" if scheme_id in ("mysy_gujarat", "mysy") else scheme_id
+    try:
+        eval_res = service.evaluate_scholarship(
+            student_id=st_id,
+            scheme_id=effective_scheme_id,
+            selected_track=track,
+            planned_remaining_classes=remaining_classes
+        )
+        return sanitize_value(eval_res)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @app.get("/api/scholarship/attested-facts")
 def get_attested_facts(student_id: Optional[str] = None):
@@ -709,18 +788,17 @@ def get_cohort_analysis(recompute: bool = False):
         df = generate_synthetic_cohort(n=300, seed=42)
         analysis = run_unsupervised_cohort_analysis(df, min_k=3, max_k=6)
         df_analyzed = analysis["analyzedData"]
-        
-        # Prepare points for scatter plot (max 300 points)
+           # Prepare points for scatter plot (max 300 points)
         points = []
         for _, row in df_analyzed.iterrows():
             points.append({
-                "student_id": row["student_id"],
-                "attendance_overall": round(float(row["attendance_overall"]), 1),
-                "mean_marks": round(float(row["mean_marks"]), 1),
+                "student_id": str(row["student_id"]),
+                "attendance_overall": safe_float(row["attendance_overall"], 0.0, 1),
+                "mean_marks": safe_float(row["mean_marks"], 0.0, 1),
                 "cluster_id": int(row["cluster_id"]),
                 "is_anomaly": bool(row["is_anomaly"]),
-                "lowest_component_att": round(float(row["lowest_component_att"]), 1),
-                "engagement_points": round(float(row["engagement_points"]), 1),
+                "lowest_component_att": safe_float(row["lowest_component_att"], 0.0, 1),
+                "engagement_points": safe_float(row["engagement_points"], 0.0, 1),
                 "rule_based_signal": str(row["rule_based_signal"])
             })
 
@@ -742,9 +820,9 @@ def get_cohort_analysis(recompute: bool = False):
                     "clusterId": int(c_id),
                     "size": size,
                     "suppressed": False,
-                    "meanAttendance": round(float(c_df["attendance_overall"].mean()), 1),
-                    "meanMarks": round(float(c_df["mean_marks"].mean()), 1),
-                    "meanEngagement": round(float(c_df["engagement_points"].mean()), 1),
+                    "meanAttendance": safe_float(c_df["attendance_overall"].mean(), 0.0, 1),
+                    "meanMarks": safe_float(c_df["mean_marks"].mean(), 0.0, 1),
+                    "meanEngagement": safe_float(c_df["engagement_points"].mean(), 0.0, 1),
                     "anomalyCount": int(c_df["is_anomaly"].sum()),
                     "label": f"Cluster {c_id}"
                 })
@@ -752,7 +830,7 @@ def get_cohort_analysis(recompute: bool = False):
         _cached_cohort_analysis = {
             "cohortSize": len(df_analyzed),
             "bestK": int(analysis["bestK"]),
-            "bestSilhouette": round(float(analysis["bestSilhouette"]), 3),
+            "bestSilhouette": safe_float(analysis["bestSilhouette"], 0.0, 3),
             "anomalyCount": int(analysis["anomalyCount"]),
             "privacyGuard": "k-anonymity (n < 5 suppressed)",
             "clusters": cluster_summaries,
@@ -770,92 +848,226 @@ def get_cohort_analysis(recompute: bool = False):
 # -------------------------------------------------------------
 # Data Workspace Endpoints (Connect / Import / Paste / Provider)
 # -------------------------------------------------------------
+def _detect_and_preview_csv(content: str, student_id: str) -> dict[str, Any]:
+    clean_content = content.lstrip("\ufeff").strip()
+    if not clean_content:
+        return {
+            "valid": False,
+            "records": [],
+            "errors": ["Uploaded file is empty. Please select or paste a non-empty CSV file."],
+            "checksum": "",
+            "rowCount": 0,
+            "importType": "unknown",
+        }
+
+    first_line = clean_content.splitlines()[0] if clean_content.splitlines() else ""
+    headers = [h.strip().lower() for h in first_line.split(",") if h.strip()]
+    headers_set = set(headers)
+
+    is_attendance = bool({"component", "present_count", "total_count"}.intersection(headers_set))
+    is_marks = bool({"assessment_type", "obtained_marks", "total_marks"}.intersection(headers_set))
+
+    if is_attendance:
+        return FileImportProvider.preview_attendance_csv(clean_content, student_id)
+    elif is_marks:
+        return FileImportProvider.preview_marks_csv(clean_content, student_id)
+    else:
+        import hashlib
+        return {
+            "valid": False,
+            "records": [],
+            "errors": [
+                "Unrecognized CSV format. Headers must match either Attendance CSV "
+                "(required: 'course_code, component, present_count, total_count') or "
+                "Marks CSV (required: 'course_code, assessment_type, obtained_marks, total_marks')."
+            ],
+            "checksum": hashlib.sha256(clean_content.encode("utf-8")).hexdigest()[:12],
+            "rowCount": 0,
+            "importType": "unknown",
+        }
+
+
 @app.post("/api/data-workspace/preview-file")
 def preview_file(req: FileImportRequest):
-    target_id = f"student_imported_{abs(hash(req.student_name)) % 10000}"
-    preview = FileImportProvider.preview_attendance_csv(req.content, target_id)
-    
+    if not req.student_name or not req.student_name.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid student name: Student full name is required and cannot be empty."
+        )
+    if not req.program or not req.program.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid degree program: Degree program is required and cannot be empty."
+        )
+    if not req.content or not req.content.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty. Please select a valid CSV file with academic data."
+        )
+
+    target_id = f"student_imported_{abs(hash(req.student_name.strip())) % 10000}"
+    preview = _detect_and_preview_csv(req.content, target_id)
+
     records_clean = []
+    import_type = preview.get("importType", "attendance")
     if preview.get("valid") and preview.get("records"):
-        for r in preview["records"]:
-            records_clean.append({
-                "courseId": r.courseId,
-                "courseName": r.courseName or r.courseId,
-                "component": r.component.value,
-                "presentCount": r.presentCount,
-                "totalCount": r.totalCount,
-                "percentage": r.computed_percentage
-            })
+        if import_type == "attendance":
+            for r in preview["records"]:
+                records_clean.append({
+                    "courseId": r.courseId,
+                    "courseName": r.courseId,
+                    "component": r.component.value if hasattr(r.component, "value") else str(r.component),
+                    "presentCount": r.presentCount,
+                    "totalCount": r.totalCount,
+                    "percentage": r.computed_percentage,
+                })
+        else:
+            for a in preview["records"]:
+                records_clean.append({
+                    "courseId": a.courseId,
+                    "courseName": a.courseId,
+                    "component": getattr(a, "type", "Assessment"),
+                    "presentCount": a.obtainedMarks,
+                    "totalCount": a.totalMarks,
+                    "percentage": a.percentage,
+                })
 
     return sanitize_value({
-        "valid": preview["valid"],
-        "rowCount": preview["rowCount"],
-        "checksum": preview.get("checksum"),
+        "valid": preview.get("valid", False),
+        "rowCount": preview.get("rowCount", len(records_clean)),
+        "checksum": preview.get("checksum", ""),
         "errors": preview.get("errors", []),
-        "records": records_clean
+        "records": records_clean,
+        "importType": import_type,
     })
+
 
 @app.post("/api/data-workspace/commit-file")
 def commit_file(req: FileImportRequest):
-    target_id = f"student_imported_{abs(hash(req.student_name)) % 10000}"
-    preview = FileImportProvider.preview_attendance_csv(req.content, target_id)
-    
-    if not preview["valid"]:
-        raise HTTPException(status_code=400, detail="Uploaded file failed validation: " + "; ".join(preview["errors"]))
+    if not req.student_name or not req.student_name.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid student name: Student full name is required."
+        )
+    if not req.program or not req.program.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid degree program: Degree program is required."
+        )
+    if not req.content or not req.content.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty. Please provide a valid CSV file."
+        )
 
+    target_id = f"student_imported_{abs(hash(req.student_name.strip())) % 10000}"
+    preview = _detect_and_preview_csv(req.content, target_id)
+
+    if not preview.get("valid"):
+        errors_str = "; ".join(preview.get("errors", ["Data validation failed"]))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Uploaded file failed validation: {errors_str}"
+        )
+
+    # 1. Save or update the Student profile
     imported_student = Student(
         id=target_id,
-        externalStudentId=f"IMP-{abs(hash(req.student_name)) % 1000:03d}",
-        name=req.student_name,
-        program=req.program,
-        semester=req.semester,
-        academicYear=req.academic_year,
+        externalStudentId=f"IMP-{abs(hash(req.student_name.strip())) % 1000:03d}",
+        name=req.student_name.strip(),
+        program=req.program.strip(),
+        semester=req.semester or 3,
+        academicYear=req.academic_year or "2026-27",
     )
     service.repo.save_student(imported_student)
 
-    for rec in preview["records"]:
-        service.repo.save_attendance_record(rec)
+    # 2. Save Course metadata for every course in this dataset
+    import_type = preview.get("importType", "attendance")
+    course_ids = set(item.courseId for item in preview.get("records", []))
+    for c_id in course_ids:
+        new_c = Course(
+            id=c_id,
+            code=c_id,
+            shortName=c_id,
+            fullName=f"{c_id} Course",
+            credits=3.0,
+            semester=req.semester or 3,
+        )
+        service.repo.save_course(target_id, new_c)
 
+    # 3. Save records (Attendance or Assessments)
+    if import_type == "attendance":
+        for rec in preview["records"]:
+            service.repo.save_attendance_record(rec)
+    else:
+        for ass in preview["records"]:
+            service.repo.save_assessment(ass)
+
+    # 4. Switch active student ID to the imported student
     _state["active_student_id"] = target_id
-    
+
     return sanitize_value({
         "success": True,
         "studentId": target_id,
-        "studentName": req.student_name,
-        "recordsCount": len(preview["records"])
+        "studentName": req.student_name.strip(),
+        "recordsCount": len(preview["records"]),
+        "importType": import_type,
     })
+
 
 @app.post("/api/data-workspace/preview-paste")
 def preview_paste(req: PasteImportRequest):
     st_id = get_current_student_id(req.student_id)
+    if not req.text or not req.text.strip():
+        raise HTTPException(status_code=400, detail="Pasted text cannot be empty.")
+
     parsed = PasteImportProvider.parse_attendance_paste(req.text, st_id)
-    
+
     records_clean = []
     if parsed.get("valid") and parsed.get("records"):
         for r in parsed["records"]:
             records_clean.append({
                 "courseId": r.courseId,
-                "courseName": r.courseName or r.courseId,
-                "component": r.component.value,
+                "courseName": r.courseId,
+                "component": r.component.value if hasattr(r.component, "value") else str(r.component),
                 "presentCount": r.presentCount,
                 "totalCount": r.totalCount,
-                "percentage": r.computed_percentage
+                "percentage": r.computed_percentage,
             })
 
     return sanitize_value({
-        "valid": parsed["valid"],
-        "rowCount": parsed["rowCount"],
+        "valid": parsed.get("valid", False),
+        "rowCount": parsed.get("rowCount", len(records_clean)),
+        "checksum": parsed.get("checksum", ""),
         "errors": parsed.get("errors", []),
-        "records": records_clean
+        "records": records_clean,
     })
+
 
 @app.post("/api/data-workspace/commit-paste")
 def commit_paste(req: PasteImportRequest):
     st_id = get_current_student_id(req.student_id)
+    if not req.text or not req.text.strip():
+        raise HTTPException(status_code=400, detail="Pasted text cannot be empty.")
+
     parsed = PasteImportProvider.parse_attendance_paste(req.text, st_id)
-    
-    if not parsed["valid"]:
-        raise HTTPException(status_code=400, detail="Pasted text failed parsing: " + "; ".join(parsed["errors"]))
+
+    if not parsed.get("valid"):
+        errors_str = "; ".join(parsed.get("errors", ["Invalid format"]))
+        raise HTTPException(status_code=400, detail=f"Pasted text failed parsing: {errors_str}")
+
+    # Ensure course entries exist
+    course_ids = set(r.courseId for r in parsed["records"])
+    for c_id in course_ids:
+        new_c = Course(
+            id=c_id,
+            code=c_id,
+            shortName=c_id,
+            fullName=f"{c_id} Course",
+            credits=3.0,
+            semester=3,
+        )
+        service.repo.save_course(st_id, new_c)
 
     for r in parsed["records"]:
         service.repo.save_attendance_record(r)
@@ -863,7 +1075,7 @@ def commit_paste(req: PasteImportRequest):
     return sanitize_value({
         "success": True,
         "studentId": st_id,
-        "recordsCommitted": len(parsed["records"])
+        "recordsCommitted": len(parsed["records"]),
     })
 
 @app.get("/api/data-workspace/templates/{template_type}")

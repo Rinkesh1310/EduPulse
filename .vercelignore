@@ -1,0 +1,8 @@
+# Vercel Ignore File
+# Ignore test caches, virtualenvs, and test directories
+.venv/
+.pytest_cache/
+.ruff_cache/
+tests/
+scripts/
+scratch/

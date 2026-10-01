@@ -1,0 +1,3 @@
+"""
+EduPulse FastAPI Backend Package
+"""
